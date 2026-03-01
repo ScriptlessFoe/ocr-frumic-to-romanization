@@ -13,7 +13,7 @@ import os
 # - translate symbols into romanization
 # - (opt.) translate romanization back into clean symbols to double check.
 
-DIST = 10
+DIST = 5
 GAP = 25
 
 debug_dir = "./debug"
@@ -54,49 +54,61 @@ inputs = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if os.path.i
 inputs_img_rgb = [cv.imread(name) for name in inputs]
 inputs_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in inputs]
 
-# do template matching
+# do template matching, with resizing
 for i, input_img in enumerate(inputs_img):
     scale_successes = {}
-    symbol_locs = []
+    scale_symbol_locs = {}
 
     for j, template in enumerate(resized_templates_img):
         tw, th = template.shape[::-1]
-        # iw, ih = input_img.shape[::-1]
+        iw, ih = input_img.shape[::-1]
 
-        # # loop over the scales of the image
-        # for scale in np.linspace(0.2, 1.0, 20)[::-1]:
-        #     # resize image
-        #     resized_input = cv.resize(input_img, (int(iw*scale), int(ih*scale)))
+        # loop over the scales of the image
+        for scale in np.linspace(0.5, 1.5, 10)[::-1]:
+            # resize image
+            resized_input = cv.resize(input_img, (int(iw*scale), int(ih*scale)))
 
-        #     if resized_input.shape[0] < th or resized_input.shape[1] < tw:
-        #         break
+            if resized_input.shape[0] < th or resized_input.shape[1] < tw:
+                break
 
-        res = cv.matchTemplate(input_img, template, cv.TM_CCOEFF_NORMED)
-        threshold = 0.8
-        if j == template_names.index("nii"):
-            threshold = 0.74
-        if j == template_names.index("c"):
-            threshold = 0.75
-        loc = np.where(res >= threshold)
-        if (len(loc[0]) != 0):
-            # record successful template matches
-
-            # if str(scale) in scale_successes:
-            #     scale_successes[str(scale)] += 1
-            # else:
-            #     scale_successes[str(scale)] = 1
+            res = cv.matchTemplate(resized_input, template, cv.TM_CCOEFF_NORMED)
+            threshold = 0.8
+            if j == template_names.index("nii"):
+                threshold = 0.74
+            if j == template_names.index("a"):
+                threshold = 0.79
+            loc = np.where(res >= threshold)
+            if (len(loc[0]) != 0):
+                # record successful template matches
+                if scale in scale_successes:
+                    scale_successes[scale] += 1
+                else:
+                    scale_successes[scale] = 1
             
-            # draw box around identified symbols
-            for pt in zip(*loc[::-1]):
-                cv.rectangle(inputs_img_rgb[i], pt, (pt[0] + tw, pt[1] + th), (0,0,255), 2)
-        
-        # if j == template_names.index("s"):
-        #     plt.plot,plt.imshow(res,cmap = 'gray')
-        #     plt.show()
+            if scale in scale_symbol_locs:
+                scale_symbol_locs[scale].append(loc)
+            else:
+                scale_symbol_locs[scale] = [loc]
 
-        symbol_locs.append(loc)
+            # debug
+            # if j == template_names.index("c") and i == input_names.index("messenger") and scale == 1.5:
+            #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
+            #     plt.show()
+
+    # get symbol locks with most symbol detections
+    scale_max = max(scale_successes, key=scale_successes.get)
+    symbol_locs = scale_symbol_locs[scale_max]
+
+    # debug
+    # if i == input_names.index("messenger"):
+    #     print(scale_max)
     
-    # print image of all detected symbols
+    # make image of with boxes on all detected symbols
+    iw, ih = inputs_img_rgb[i].shape[1::-1]
+    inputs_img_rgb[i] = cv.resize(inputs_img_rgb[i], (int(iw*scale_max), int(ih*scale_max)))
+    for loc in symbol_locs:
+        for pt in zip(*loc[::-1]):
+            cv.rectangle(inputs_img_rgb[i], pt, (pt[0] + 15, pt[1] + 20), (0,0,255), 2)
     write_status = cv.imwrite(os.path.join(output_dir, input_names[i] + ".jpg"), inputs_img_rgb[i])
     if not write_status:
         print(f"Failed to write image")
@@ -125,20 +137,28 @@ for i, input_img in enumerate(inputs_img):
     # remove dupes
     for key in lines:
         line = lines[key]
-        last = ((0,0), 0)
+        last = ((-1000,0), 0)
         clean_line = []
         for pt in line:
             if not abs(last[0][0] - pt[0][0]) <= DIST:
                 clean_line.append(pt)
-            # check edge cases
+            # check edge cases (symbol appears inside another symbol)
             if last[1] != pt[1]:
                 if last[1] == template_names.index("d") and pt[1] == template_names.index("uth"):
+                    clean_line.pop()
+                    clean_line.append(pt)
+                if last[1] == template_names.index("k") and pt[1] == template_names.index("uth"):
                     clean_line.pop()
                     clean_line.append(pt)
                 if last[1] == template_names.index("s") and pt[1] == template_names.index("n"):
                     clean_line.pop()
                     clean_line.append(pt)
-
+                if last[1] == template_names.index("i") and pt[1] == template_names.index("l"):
+                    clean_line.pop()
+                    clean_line.append(pt)
+                if last[1] == template_names.index("k") and pt[1] == template_names.index("u"):
+                    clean_line.pop()
+                    clean_line.append(pt)
             last = pt
         lines[key] = clean_line
 
@@ -149,7 +169,8 @@ for i, input_img in enumerate(inputs_img):
             line_str = ""
             last = line[0]
             for pt in line:
-                gap = (GAP - 5) if (last[1] == template_names.index("s")) else GAP
+                # smaller symbols get smaller gaps
+                gap = (GAP - 5) if (last[1] == template_names.index("s") or last[1] == template_names.index("c")) else GAP
                 if abs(last[0][0] - pt[0][0]) >= gap:
                     line_str += " "
                 last = pt
