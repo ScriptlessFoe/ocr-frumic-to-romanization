@@ -15,13 +15,13 @@ import os
 
 DIST = 5
 GAP = 25
+OUTPUT_DIR = "./output"
+TEMPLATE_DIR = "./templates"
+INPUT_DIR = "./input"
 
-debug_dir = "./debug"
-
-# clean output
-output_dir = "./output"
-for filename in os.listdir(output_dir):
-    file_path = os.path.join(output_dir, filename)
+# clean output directory
+for filename in os.listdir(OUTPUT_DIR):
+    file_path = os.path.join(OUTPUT_DIR, filename)
     try:
         # Check if the item is a file or a symbolic link, then delete
         if os.path.isfile(file_path) or os.path.islink(file_path):
@@ -33,24 +33,14 @@ for filename in os.listdir(output_dir):
     except Exception as e:
         print(f'Error deleting {file_path}: {e}')
 
-# import template and input images
-template_dir = "./templates"
-template_names = sorted([f[:-4] for f in os.listdir(template_dir) if os.path.isfile(os.path.join(template_dir, f))])
-templates = sorted([os.path.join(template_dir, f) for f in os.listdir(template_dir) if os.path.isfile(os.path.join(template_dir, f))])
+# import template images
+template_names = sorted([f[:-4] for f in os.listdir(TEMPLATE_DIR) if os.path.isfile(os.path.join(TEMPLATE_DIR, f))])
+templates = sorted([os.path.join(TEMPLATE_DIR, f) for f in os.listdir(TEMPLATE_DIR) if os.path.isfile(os.path.join(TEMPLATE_DIR, f))])
 templates_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in templates]
 
-# resize templates to be small
-resized_templates_img = []
-for template in templates_img:
-    w, h = template.shape[::-1]
-    n_h = 20
-    aspect_ratio = n_h/h
-    n_w = int(w*aspect_ratio)
-    resized_templates_img.append(cv.resize(template, (n_w, n_h)))
-
-input_dir = "./input"
-input_names = [f[:-4] for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] 
-inputs = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] 
+# import input images
+input_names = [f[:-4] for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))] 
+inputs = [os.path.join(INPUT_DIR, f) for f in os.listdir(INPUT_DIR) if os.path.isfile(os.path.join(INPUT_DIR, f))] 
 inputs_img_rgb = [cv.imread(name) for name in inputs]
 inputs_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in inputs]
 
@@ -59,7 +49,7 @@ for i, input_img in enumerate(inputs_img):
     scale_successes = {}
     scale_symbol_locs = {}
 
-    for j, template in enumerate(resized_templates_img):
+    for j, template in enumerate(templates_img):
         tw, th = template.shape[::-1]
         iw, ih = input_img.shape[::-1]
 
@@ -109,7 +99,7 @@ for i, input_img in enumerate(inputs_img):
     for loc in symbol_locs:
         for pt in zip(*loc[::-1]):
             cv.rectangle(inputs_img_rgb[i], pt, (pt[0] + 15, pt[1] + 20), (0,0,255), 2)
-    write_status = cv.imwrite(os.path.join(output_dir, input_names[i] + ".jpg"), inputs_img_rgb[i])
+    write_status = cv.imwrite(os.path.join(OUTPUT_DIR, input_names[i] + ".jpg"), inputs_img_rgb[i])
     if not write_status:
         print(f"Failed to write image")
 
@@ -163,7 +153,7 @@ for i, input_img in enumerate(inputs_img):
         lines[key] = clean_line
 
     # print, adding spaces
-    with open(os.path.join(output_dir, input_names[i] + ".txt"), "w") as f:
+    with open(os.path.join(OUTPUT_DIR, input_names[i] + ".txt"), "w") as f:
         for key in lines:
             line = lines[key]
             line_str = ""
