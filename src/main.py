@@ -13,6 +13,11 @@ import os
 # - translate symbols into romanization
 # - (opt.) translate romanization back into clean symbols to double check.
 
+DIST = 10
+GAP = 25
+
+debug_dir = "./debug"
+
 # clean output
 output_dir = "./output"
 for filename in os.listdir(output_dir):
@@ -38,13 +43,13 @@ templates_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in templates]
 resized_templates_img = []
 for template in templates_img:
     w, h = template.shape[::-1]
-    n_w = 20
-    aspect_ratio = n_w/w
-    n_h = int(h*aspect_ratio)
+    n_h = 20
+    aspect_ratio = n_h/h
+    n_w = int(w*aspect_ratio)
     resized_templates_img.append(cv.resize(template, (n_w, n_h)))
 
 input_dir = "./input"
-input_names = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] 
+input_names = [f[:-4] for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] 
 inputs = [os.path.join(input_dir, f) for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))] 
 inputs_img_rgb = [cv.imread(name) for name in inputs]
 inputs_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in inputs]
@@ -68,6 +73,10 @@ for i, input_img in enumerate(inputs_img):
 
         res = cv.matchTemplate(input_img, template, cv.TM_CCOEFF_NORMED)
         threshold = 0.8
+        if j == template_names.index("nii"):
+            threshold = 0.74
+        if j == template_names.index("c"):
+            threshold = 0.75
         loc = np.where(res >= threshold)
         if (len(loc[0]) != 0):
             # record successful template matches
@@ -80,13 +89,84 @@ for i, input_img in enumerate(inputs_img):
             # draw box around identified symbols
             for pt in zip(*loc[::-1]):
                 cv.rectangle(inputs_img_rgb[i], pt, (pt[0] + tw, pt[1] + th), (0,0,255), 2)
+        
+        # if j == template_names.index("s"):
+        #     plt.plot,plt.imshow(res,cmap = 'gray')
+        #     plt.show()
 
         symbol_locs.append(loc)
     
     # print image of all detected symbols
-    cv.imwrite(os.path.join(output_dir, input_names[i]), inputs_img_rgb[i])
+    write_status = cv.imwrite(os.path.join(output_dir, input_names[i] + ".jpg"), inputs_img_rgb[i])
+    if not write_status:
+        print(f"Failed to write image")
 
-    print(symbol_locs)
+    # group points by y value to get lines
+    lines = {}
+    last = (0,0)
+    for j, loc in enumerate(symbol_locs):
+        for pt in zip(*loc[::-1]):
+
+            # group near
+            found = 0
+            for key in lines.keys():
+                if abs(key - pt[1]) <= DIST:
+                    lines[key].append(((int(pt[0]), int(pt[1])), j))
+                    found = 1
+                    break
+            
+            if found == 0:
+                lines[pt[1]] = [((int(pt[0]), int(pt[1])), j)]
+    
+    # sort
+    for key in lines:
+        lines[key] = sorted(lines[key], key= lambda pt: pt[0][0])
+    
+    # remove dupes
+    for key in lines:
+        line = lines[key]
+        last = ((0,0), 0)
+        clean_line = []
+        for pt in line:
+            if not abs(last[0][0] - pt[0][0]) <= DIST:
+                clean_line.append(pt)
+            # check edge cases
+            if last[1] != pt[1]:
+                if last[1] == template_names.index("d") and pt[1] == template_names.index("uth"):
+                    clean_line.pop()
+                    clean_line.append(pt)
+                if last[1] == template_names.index("s") and pt[1] == template_names.index("n"):
+                    clean_line.pop()
+                    clean_line.append(pt)
+
+            last = pt
+        lines[key] = clean_line
+
+    # print, adding spaces
+    with open(os.path.join(output_dir, input_names[i] + ".txt"), "w") as f:
+        for key in lines:
+            line = lines[key]
+            line_str = ""
+            last = line[0]
+            for pt in line:
+                gap = (GAP - 5) if (last[1] == template_names.index("s")) else GAP
+                if abs(last[0][0] - pt[0][0]) >= gap:
+                    line_str += " "
+                last = pt
+                ch = template_names[pt[1]]
+                if len(ch) == 1:
+                    line_str += ch.upper()
+                else:
+                    line_str += "["+ch+"]"
+            f.write(line_str)
+            f.write("\n")
+        f.close()
+    
+    
+            
+            
+
+
 
 
 
