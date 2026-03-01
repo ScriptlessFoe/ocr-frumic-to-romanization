@@ -11,4 +11,11 @@ Code is currently very rough, refactor and potential web integration soon.
 - place reasonably sized .jpg images in "input" directory
   - size of each symbol should be around 20 by 20 pixels
 - run "src/main.py" from top directory
-- 
+
+## TODO
+
+- more testing
+- detect punctuation
+- connect program to website
+- additional functionality
+  - romanization to Frumic
