@@ -4,6 +4,8 @@ Automatically reads Frumic from a screenshot and romanizes it into letters accor
 
 Code is currently very rough, refactor and potential web integration soon.
 
+Currently only works with screenshots from the game itself.
+
 ## How to use
 
 - set up .venv with requirements.txt
@@ -15,7 +17,6 @@ Code is currently very rough, refactor and potential web integration soon.
 ## TODO
 
 - more testing
-- detect punctuation
 - connect program to website
 - additional functionality
   - romanization to Frumic
