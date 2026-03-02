@@ -2,6 +2,9 @@ import cv2 as cv
 import numpy as np
 import os
 
+# debug
+from matplotlib import pyplot as plt
+
 DIST = 6
 
 # import template images
@@ -59,7 +62,7 @@ def read_frumic(input_img_rgb, template_dir):
                 scale_symbol_locs[scale] = [loc]
 
             # debug
-            # if j == template_names.index("c") and i == input_names.index("messenger") and scale == 1.5:
+            # if j == template_names.index("period") and scale == 1.5:
             #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
             #     plt.show()
 
@@ -73,8 +76,7 @@ def read_frumic(input_img_rgb, template_dir):
     symbol_locs = scale_symbol_locs[scale_max]
 
     # debug
-    # if i == input_names.index("messenger"):
-    #     print(scale_max)
+    # print(scale_max)
     
     # make image of with boxes on all detected symbols
     iw, ih = input_img_rgb.shape[1::-1]
@@ -134,22 +136,24 @@ def read_frumic(input_img_rgb, template_dir):
 
     # create string, adding spaces
     punctuation_index = [template_names.index("comma"), 
-                       template_names.index("period"), 
-                       template_names.index("bang"), 
-                       template_names.index("amperstand"), 
-                       template_names.index("dquote"),
-                       template_names.index("lparen"),
-                       template_names.index("rparen"),
-                       template_names.index("percent"),
-                       template_names.index("question"),]
-    punctuation_str = [",", ".", "!", "&", "\"", "\'", "(", ")", "%", "?"]
+                        template_names.index("comma2"), 
+                        template_names.index("period"), 
+                        template_names.index("bang"), 
+                        template_names.index("amperstand"), 
+                        template_names.index("dquote"),
+                        template_names.index("lparen"),
+                        template_names.index("rparen"),
+                        template_names.index("percent"),
+                        template_names.index("question"),]
+    punctuation_str = [",", ",", ".", "!", "&", "\"", "\'", "(", ")", "%", "?"]
     full_str = ""
     for key in lines:
         line = lines[key]
         line_str = ""
         last = line[0]
-        ave_gap = int(np.mean(np.diff([pt[0][0] for pt in line])))
-        print(ave_gap)
+        ave_gap = 25
+        if (len(line) > 1):
+            ave_gap = int(np.mean(np.diff([pt[0][0] for pt in line])))
         for pt in line:
             # smaller symbols get smaller gaps
             gap = ave_gap if (last[1] in [template_names.index("s"), template_names.index("c"), template_names.index("lparen"), template_names.index("dquote")]) else ave_gap + 5
