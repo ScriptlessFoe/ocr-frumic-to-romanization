@@ -20,6 +20,11 @@ def read_frumic(input_img_rgb, template_dir):
     template_names, templates_img = __import_templates(template_dir)
     input_img = cv.cvtColor(input_img_rgb, cv.COLOR_BGR2GRAY)
 
+    # determine if text is black on white and correct accordingly:
+    mean_value = cv.mean(input_img)
+    if (mean_value[0] > 127):
+        input_img = cv.bitwise_not(input_img)
+
     # do template matching, with resizing
     scale_successes = {}
     scale_symbol_locs = {}
@@ -125,6 +130,16 @@ def read_frumic(input_img_rgb, template_dir):
         lines[key] = clean_line
 
     # create string, adding spaces
+    punctuation_index = [template_names.index("comma"), 
+                       template_names.index("period"), 
+                       template_names.index("bang"), 
+                       template_names.index("amperstand"), 
+                       template_names.index("dquote"),
+                       template_names.index("lparen"),
+                       template_names.index("rparen"),
+                       template_names.index("percent"),
+                       template_names.index("question"),]
+    punctuation_str = [",", ".", "!", "&", "\"", "\'", "(", ")", "%", "?"]
     full_str = ""
     for key in lines:
         line = lines[key]
@@ -132,13 +147,15 @@ def read_frumic(input_img_rgb, template_dir):
         last = line[0]
         for pt in line:
             # smaller symbols get smaller gaps
-            gap = (GAP - 5) if (last[1] == template_names.index("s") or last[1] == template_names.index("c")) else GAP
-            if abs(last[0][0] - pt[0][0]) >= gap:
+            gap = (GAP - 7) if (last[1] in [template_names.index("s"), template_names.index("c"), template_names.index("lparen"), template_names.index("dquote")]) else GAP
+            if abs(last[0][0] - pt[0][0]) >= gap or (last[1] in punctuation_index and last[1] not in [template_names.index("lparen"), template_names.index("dquote")]):
                 line_str += " "
             last = pt
             ch = template_names[pt[1]]
             if len(ch) == 1:
                 line_str += ch.upper()
+            elif pt[1] in punctuation_index:
+                line_str += punctuation_str[punctuation_index.index(pt[1])]
             else:
                 line_str += "["+ch+"]"
         full_str += line_str + "\n"
