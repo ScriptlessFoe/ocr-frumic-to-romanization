@@ -2,8 +2,7 @@ import cv2 as cv
 import numpy as np
 import os
 
-DIST = 5
-GAP = 25
+DIST = 6
 
 # import template images
 def __import_templates(template_dir):
@@ -64,6 +63,11 @@ def read_frumic(input_img_rgb, template_dir):
             #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
             #     plt.show()
 
+    # check if successful
+    if (len(scale_successes) == 0):
+        # Failed, return early
+        return "", input_img_rgb
+
     # get symbol locks with most symbol detections
     scale_max = max(scale_successes, key=scale_successes.get)
     symbol_locs = scale_symbol_locs[scale_max]
@@ -85,7 +89,6 @@ def read_frumic(input_img_rgb, template_dir):
     last = (0,0)
     for j, loc in enumerate(symbol_locs):
         for pt in zip(*loc[::-1]):
-
             # group near
             found = 0
             for key in lines.keys():
@@ -145,9 +148,11 @@ def read_frumic(input_img_rgb, template_dir):
         line = lines[key]
         line_str = ""
         last = line[0]
+        ave_gap = int(np.mean(np.diff([pt[0][0] for pt in line])))
+        print(ave_gap)
         for pt in line:
             # smaller symbols get smaller gaps
-            gap = (GAP - 7) if (last[1] in [template_names.index("s"), template_names.index("c"), template_names.index("lparen"), template_names.index("dquote")]) else GAP
+            gap = ave_gap if (last[1] in [template_names.index("s"), template_names.index("c"), template_names.index("lparen"), template_names.index("dquote")]) else ave_gap + 5
             if abs(last[0][0] - pt[0][0]) >= gap or (last[1] in punctuation_index and last[1] not in [template_names.index("lparen"), template_names.index("dquote")]):
                 line_str += " "
             last = pt
