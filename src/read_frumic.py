@@ -62,9 +62,9 @@ def read_frumic(input_img_rgb, template_dir):
                 scale_symbol_locs[scale] = [loc]
 
             # debug
-            # if j == template_names.index("period") and scale == 1.5:
-            #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
-            #     plt.show()
+            if j == template_names.index("period") and scale == 0.9444444444444444:
+                plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
+                plt.show()
 
     # check if successful
     if (len(scale_successes) == 0):
