@@ -3,9 +3,6 @@ from cv2.typing import MatLike
 import numpy as np
 import os
 
-# debug
-from matplotlib import pyplot as plt
-
 # PARAMETERS
 DIST = 6
 START_RESIZE = 0.5
@@ -58,11 +55,6 @@ def __resizable_template_matching(template_names: list[str], templates_img: list
                 scale_symbol_locs[scale].append(loc)
             else:
                 scale_symbol_locs[scale] = [loc]
-
-            # debug
-            # if j == template_names.index("period") and scale == 0.9444444444444444:
-            #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
-            #     plt.show()
 
     # check if successful
     if (len(scale_successes) == 0):
