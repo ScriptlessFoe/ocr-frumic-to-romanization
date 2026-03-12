@@ -44,6 +44,7 @@ for i, input_img in enumerate(inputs_img_rgb):
     with open(os.path.join(OUTPUT_DIR, input_names[i] + ".txt"), "w") as f:
         f.write("Encoded string:\n")
         f.write(encoded_str)
+        f.write("\n")
         f.write("Transcribed message:\n")
         f.write(transcribed_str)
         f.close

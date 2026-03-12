@@ -1,41 +1,41 @@
 import cv2 as cv
+from cv2.typing import MatLike
 import numpy as np
 import os
 
 # debug
 from matplotlib import pyplot as plt
 
+# PARAMETERS
 DIST = 6
+START_RESIZE = 0.5
+END_RESIZE = 1.5
+NUM_OF_RESIZE_STEPS = 10
+THRESHOLD = 0.8
+ADJUSTED_THRESHOLDS = {"nii": 0.74, "a": 0.79}
+PUNCTUATION_TEMPLATE_NAMES = ["comma", "comma2", "period", "bang", "amperstand", "dquote", "lparen", "rparen", "percent", "question"]
+PUNCTUATION_STR = [",", ",", ".", "!", "&", "\"", "(", ")", "%", "?"]
+TRANS_STR = {"c": "sh", "d": "th", "nii": "nif", "az": "as", "ek": "eksh"}
+SYMBOL_OVERLAPS = {"d": ["uth"], "k": ["uth", "u"], "s": ["n"], "i": ["l"]}
 
 # import template images
-def __import_templates(template_dir):
+def __import_templates(template_dir: str) -> tuple[list[str], list[MatLike]]:
     template_names = sorted([f[:-4] for f in os.listdir(template_dir) if os.path.isfile(os.path.join(template_dir, f))])
     templates = sorted([os.path.join(template_dir, f) for f in os.listdir(template_dir) if os.path.isfile(os.path.join(template_dir, f))])
     templates_img = [cv.imread(name, cv.IMREAD_GRAYSCALE) for name in templates]
 
     return template_names, templates_img
 
-# ----------------------------------------------------------------------------------------------------------------------------
-# main function def
-# ----------------------------------------------------------------------------------------------------------------------------
-def read_frumic(input_img_rgb, template_dir):
-    template_names, templates_img = __import_templates(template_dir)
-    input_img = cv.cvtColor(input_img_rgb, cv.COLOR_BGR2GRAY)
-
-    # determine if text is black on white and correct accordingly:
-    mean_value = cv.mean(input_img)
-    if (mean_value[0] > 127):
-        input_img = cv.bitwise_not(input_img)
-
-    # do template matching, with resizing
-    scale_successes = {}
-    scale_symbol_locs = {}
+# do template matching, with resizing
+def __resizable_template_matching(template_names: list[str], templates_img: list[MatLike], input_img: MatLike) -> tuple[float, list[tuple[np.ndarray, np.ndarray]]]:
+    scale_successes: dict[float, int] = {}
+    scale_symbol_locs: dict[float, list[tuple[np.ndarray, np.ndarray]]] = {}
     for j, template in enumerate(templates_img):
         tw, th = template.shape[::-1]
         iw, ih = input_img.shape[::-1]
 
         # loop over the scales of the image
-        for scale in np.linspace(0.5, 1.5, 10)[::-1]:
+        for scale in np.linspace(START_RESIZE, END_RESIZE, NUM_OF_RESIZE_STEPS)[::-1]:
             # resize image
             resized_input = cv.resize(input_img, (int(iw*scale), int(ih*scale)))
 
@@ -43,11 +43,9 @@ def read_frumic(input_img_rgb, template_dir):
                 break
 
             res = cv.matchTemplate(resized_input, template, cv.TM_CCOEFF_NORMED)
-            threshold = 0.8
-            if j == template_names.index("nii"):
-                threshold = 0.74
-            if j == template_names.index("a"):
-                threshold = 0.79
+            threshold = THRESHOLD
+            if template_names[j] in ADJUSTED_THRESHOLDS:
+                threshold = ADJUSTED_THRESHOLDS[template_names[j]]
             loc = np.where(res >= threshold)
             if (len(loc[0]) != 0):
                 # record successful template matches
@@ -69,16 +67,16 @@ def read_frumic(input_img_rgb, template_dir):
     # check if successful
     if (len(scale_successes) == 0):
         # Failed, return early
-        return "", input_img_rgb
+        return None
 
     # get symbol locks with most symbol detections
     scale_max = max(scale_successes, key=scale_successes.get)
     symbol_locs = scale_symbol_locs[scale_max]
 
-    # debug
-    # print(scale_max)
-    
-    # make image of with boxes on all detected symbols
+    return scale_max, symbol_locs
+
+# create detection boxes on identified symbols in input image
+def __create_detection_image(input_img_rgb: MatLike, scale_max: float, symbol_locs: list[tuple[np.ndarray, np.ndarray]]) -> MatLike:
     iw, ih = input_img_rgb.shape[1::-1]
     input_img_rgb = cv.resize(input_img_rgb, (int(iw*scale_max), int(ih*scale_max)))
     for loc in symbol_locs:
@@ -86,8 +84,19 @@ def read_frumic(input_img_rgb, template_dir):
             cv.rectangle(input_img_rgb, pt, (pt[0] + 15, pt[1] + 20), (0,0,255), 2)
     input_img_rgb = cv.resize(input_img_rgb, (iw, ih))
 
+    return input_img_rgb
+
+# comparison helper function for symbols within symbols
+def __overlap_compare(last: int, cur: int, template_names: list[str]) -> bool:
+    if template_names[last] in SYMBOL_OVERLAPS:
+        if template_names[cur] in SYMBOL_OVERLAPS[template_names[last]]:
+            return True
+    return False
+
+# clean and sort points by line, in left to right order
+def __clean_loc_points(template_names: list[str], symbol_locs: list[tuple[np.ndarray, np.ndarray]]) -> dict[int, tuple[tuple[int, int], int]]:
     # group points by y value to get lines
-    lines = {}
+    lines: dict[int, tuple[tuple[int, int], int]] = {}
     last = (0,0)
     for j, loc in enumerate(symbol_locs):
         for pt in zip(*loc[::-1]):
@@ -100,7 +109,7 @@ def read_frumic(input_img_rgb, template_dir):
                     break
             
             if found == 0:
-                lines[pt[1]] = [((int(pt[0]), int(pt[1])), j)]
+                lines[int(pt[1])] = [((int(pt[0]), int(pt[1])), j)]
     
     # sort
     for key in lines:
@@ -116,36 +125,17 @@ def read_frumic(input_img_rgb, template_dir):
                 clean_line.append(pt)
             # check edge cases (symbol appears inside another symbol)
             if last[1] != pt[1]:
-                if last[1] == template_names.index("d") and pt[1] == template_names.index("uth"):
-                    clean_line.pop()
-                    clean_line.append(pt)
-                if last[1] == template_names.index("k") and pt[1] == template_names.index("uth"):
-                    clean_line.pop()
-                    clean_line.append(pt)
-                if last[1] == template_names.index("s") and pt[1] == template_names.index("n"):
-                    clean_line.pop()
-                    clean_line.append(pt)
-                if last[1] == template_names.index("i") and pt[1] == template_names.index("l"):
-                    clean_line.pop()
-                    clean_line.append(pt)
-                if last[1] == template_names.index("k") and pt[1] == template_names.index("u"):
+                if __overlap_compare(last[1], pt[1], template_names):
                     clean_line.pop()
                     clean_line.append(pt)
             last = pt
         lines[key] = clean_line
+    
+    return lines
 
-    # create string, adding spaces
-    punctuation_index = [template_names.index("comma"), 
-                        template_names.index("comma2"), 
-                        template_names.index("period"), 
-                        template_names.index("bang"), 
-                        template_names.index("amperstand"), 
-                        template_names.index("dquote"),
-                        template_names.index("lparen"),
-                        template_names.index("rparen"),
-                        template_names.index("percent"),
-                        template_names.index("question"),]
-    punctuation_str = [",", ",", ".", "!", "&", "\"", "\'", "(", ")", "%", "?"]
+# create encoding and transcription strings
+def __create_messages(template_names: list[str], lines: dict[int, tuple[tuple[int, int], int]]) -> tuple[str, str]:
+    punctuation_index = [template_names.index(name) for name in PUNCTUATION_TEMPLATE_NAMES]
     encoded_str = ""
     transcribed_str = ""
     for key in lines:
@@ -166,28 +156,46 @@ def read_frumic(input_img_rgb, template_dir):
             ch = template_names[pt[1]]
             if len(ch) == 1:
                 line_str += ch.upper()
-                if ch == "c":
-                    trans_line_str += "sh"
-                elif ch == "d":
-                    trans_line_str += "th"
+                if ch in TRANS_STR:
+                    trans_line_str += TRANS_STR[ch]
                 else:
                     trans_line_str += ch
             elif pt[1] in punctuation_index:
-                line_str += punctuation_str[punctuation_index.index(pt[1])]
-                trans_line_str += punctuation_str[punctuation_index.index(pt[1])]
+                line_str += PUNCTUATION_STR[punctuation_index.index(pt[1])]
+                trans_line_str += PUNCTUATION_STR[punctuation_index.index(pt[1])]
             else:
                 line_str += "["+ch+"]"
-                if ch == "nii":
-                    trans_line_str += "nif"
-                elif ch == "az":
-                    trans_line_str += "as"
-                elif ch == "tol":
-                    trans_line_str += "tol"
-                elif ch == "uth":
-                    trans_line_str += "uth"
-                elif ch == "ek":
-                    trans_line_str += "eksh"
+                if ch in TRANS_STR:
+                    trans_line_str += TRANS_STR[ch]
+                else:
+                    trans_line_str += ch
         encoded_str += line_str + "\n"
         transcribed_str += trans_line_str + "\n"
+    
+    return encoded_str, transcribed_str
+
+# ----------------------------------------------------------------------------------------------------------------------------
+# main function def
+# ----------------------------------------------------------------------------------------------------------------------------
+def read_frumic(input_img_rgb: MatLike, template_dir: str) -> tuple[str, str, MatLike]:
+    template_names, templates_img = __import_templates(template_dir)
+    input_img = cv.cvtColor(input_img_rgb, cv.COLOR_BGR2GRAY)
+
+    # determine if text is black on white and correct accordingly:
+    mean_value = cv.mean(input_img)
+    if (mean_value[0] > 127):
+        input_img = cv.bitwise_not(input_img)
+
+    # perform template matching
+    scale_max, symbol_locs = __resizable_template_matching(template_names, templates_img, input_img)
+
+    # clean up data
+    lines = __clean_loc_points(template_names, symbol_locs)
+
+    # create output strings
+    encoded_str, transcribed_str = __create_messages(template_names, lines)
+    
+    # make image of with boxes on all detected symbols
+    input_img_rgb = __create_detection_image(input_img_rgb, scale_max, symbol_locs)
         
     return encoded_str, transcribed_str, input_img_rgb
