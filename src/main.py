@@ -38,11 +38,14 @@ inputs_img_rgb = [cv.imread(name) for name in inputs]
 
 # perform function on each input image
 for i, input_img in enumerate(inputs_img_rgb):
-    text, box_img = rf.read_frumic(input_img, TEMPLATE_DIR)
+    encoded_str, transcribed_str, box_img = rf.read_frumic(input_img, TEMPLATE_DIR)
 
     # write results
     with open(os.path.join(OUTPUT_DIR, input_names[i] + ".txt"), "w") as f:
-        f.write(text)
+        f.write("Encoded string:\n")
+        f.write(encoded_str)
+        f.write("Transcribed message:\n")
+        f.write(transcribed_str)
         f.close
     
     write_status = cv.imwrite(os.path.join(OUTPUT_DIR, input_names[i] + ".jpg"), box_img)

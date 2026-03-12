@@ -62,9 +62,9 @@ def read_frumic(input_img_rgb, template_dir):
                 scale_symbol_locs[scale] = [loc]
 
             # debug
-            if j == template_names.index("period") and scale == 0.9444444444444444:
-                plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
-                plt.show()
+            # if j == template_names.index("period") and scale == 0.9444444444444444:
+            #     plt.plot,plt.imshow(res,cmap = 'gray', vmax=1)
+            #     plt.show()
 
     # check if successful
     if (len(scale_successes) == 0):
@@ -146,10 +146,12 @@ def read_frumic(input_img_rgb, template_dir):
                         template_names.index("percent"),
                         template_names.index("question"),]
     punctuation_str = [",", ",", ".", "!", "&", "\"", "\'", "(", ")", "%", "?"]
-    full_str = ""
+    encoded_str = ""
+    transcribed_str = ""
     for key in lines:
         line = lines[key]
         line_str = ""
+        trans_line_str = ""
         last = line[0]
         ave_gap = 25
         if (len(line) > 1):
@@ -159,14 +161,33 @@ def read_frumic(input_img_rgb, template_dir):
             gap = ave_gap if (last[1] in [template_names.index("s"), template_names.index("c"), template_names.index("lparen"), template_names.index("dquote")]) else ave_gap + 5
             if abs(last[0][0] - pt[0][0]) >= gap or (last[1] in punctuation_index and last[1] not in [template_names.index("lparen"), template_names.index("dquote")]):
                 line_str += " "
+                trans_line_str += " "
             last = pt
             ch = template_names[pt[1]]
             if len(ch) == 1:
                 line_str += ch.upper()
+                if ch == "c":
+                    trans_line_str += "sh"
+                elif ch == "d":
+                    trans_line_str += "th"
+                else:
+                    trans_line_str += ch
             elif pt[1] in punctuation_index:
                 line_str += punctuation_str[punctuation_index.index(pt[1])]
+                trans_line_str += punctuation_str[punctuation_index.index(pt[1])]
             else:
                 line_str += "["+ch+"]"
-        full_str += line_str + "\n"
+                if ch == "nii":
+                    trans_line_str += "nif"
+                elif ch == "az":
+                    trans_line_str += "as"
+                elif ch == "tol":
+                    trans_line_str += "tol"
+                elif ch == "uth":
+                    trans_line_str += "uth"
+                elif ch == "ek":
+                    trans_line_str += "eksh"
+        encoded_str += line_str + "\n"
+        transcribed_str += trans_line_str + "\n"
         
-    return full_str, input_img_rgb
+    return encoded_str, transcribed_str, input_img_rgb
